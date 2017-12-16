@@ -8,8 +8,8 @@ import datetime
 import time
 
 
-_SHORT = datetime.timedelta(seconds=1)
-_LONG = datetime.timedelta(seconds=5)
+_SHORT = datetime.timedelta(seconds=5)
+_LONG = datetime.timedelta(seconds=20)
 _MARGIN = 2
 _REPEAT = _MARGIN * (_LONG / _SHORT)
 
@@ -155,6 +155,7 @@ class DHT(network.Network, timer.Timer):
         return
 
     async def slave_heartbeat_timeout(self):
+        print("slave_heartbeat_timeout")
         if self._context.heartbeat_send_job is not None:
             self._context.heartbeat_send_job.cancel()
         self._state = self.State.START
@@ -162,6 +163,7 @@ class DHT(network.Network, timer.Timer):
         asyncio.ensure_future(self.start(), loop=self._loop)
 
     async def master_heartbeat_timeout(self, client_uuid):
+        print("master_heartbeat_timeout")
         client = None
         for (uuid, addr) in self._context.peer_list:
             if uuid == client_uuid:
