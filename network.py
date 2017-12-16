@@ -9,7 +9,7 @@ NETWORK_LISTEN_ADDR = '0.0.0.0'
 NETWORK_UDP_MTU = 1024
 NETWORK_BROADCAST_ADDR = "255.255.255.255"
 EMULATE_BROADCAST = True
-EMULATE_ADDR = "127.0.0.1"#"10.0.0.{num}"
+EMULATE_ADDR = "10.0.0.{num}"
 
 
 class Network:
@@ -22,7 +22,6 @@ class Network:
             try:
                 s = data.decode(encoding="utf-8", errors="strict")
                 message = json.loads(s)
-                print(message)
                 if not "_magic" in message:
                     raise Exception("No magic value")
                 if not message["_magic"] == NETWORK_MAGIC_VALUE:

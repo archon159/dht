@@ -211,7 +211,6 @@ class DHT(network.Network, timer.Timer):
             pass
 
     async def master(self):
-        print("Master Loop")
         async def heartbeat_send():
             for (_, addr) in self._context.peer_list:
                 message = {
