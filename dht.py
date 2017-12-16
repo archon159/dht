@@ -59,18 +59,23 @@ class DHT(network.Network, timer.Timer):
             return
         logging.debug("Message received from {addr}, {message}".format(addr=addr, message=message))
 
+        print(message["type"])
         # In master case, add a node and broadcast it.
         if message["type"] == "hello":
             if self._state == self.State.START:
                 self._context.messages.append((message, addr))
             elif self._state == self.State.MASTER:
+                print("message uid = "+str(message["uuid"]))
+                print("message addr = "+str(addr))
+                print(self._context.peer_list)
                 if not (message["uuid"], addr) in self._context.peer_list:
+                    print("New Node!!")
                     self._context.peer_list.append((message["uuid"], addr))
                     self._context.peer_list.sort(reverse=True)
                     self.update_peer_list()
 
                     self.master_peer_list_updated()
-
+                    print("Updated for Hello Message")
         # if ping, pong
         elif message["type"] == "heartbeat_ping":
             message = {
