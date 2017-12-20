@@ -157,6 +157,7 @@ class DHT(network.Network, timer.Timer):
             ret = self.insert_item(message["key"], message["value"])
             print("insert complete")
             if message["uuid"] == self.uuid:
+                pass
                 #self.print_output(message["output"],str(ret))
             else:
                 response_message = {
@@ -174,6 +175,7 @@ class DHT(network.Network, timer.Timer):
             ret = self.delete_item(message["key"])
             print("delete complete")
             if message["uuid"] == self.uuid:
+                pass
                 #self.print_output(message["output"],str(ret))
             else:
                 response_message = {
