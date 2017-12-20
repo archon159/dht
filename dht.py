@@ -11,6 +11,7 @@ import os
 
 _SHORT = datetime.timedelta(seconds=5)
 _LONG = datetime.timedelta(seconds=20)
+_MY_TIME = datetime.timedelta(seconds=20)
 _MARGIN = 2
 _REPEAT = _MARGIN * (_LONG / _SHORT)
 
@@ -38,6 +39,18 @@ class DHT(network.Network, timer.Timer):
         }
         self.send_message(message, (network.NETWORK_BROADCAST_ADDR, network.NETWORK_PORT))
 
+        async def dht_timeout():
+            for d in self._context.dht_bunch:
+                for k in d:
+                    if k in self._context.key_count:
+                        key_count[k] += 1
+                    else:
+                        key_count.setdefault(k, 1)
+                    if k not in self._context.key_bunch:
+                        key_bunch.setdefault(k, d[k])
+
+        self._context.dht_timeout_job = self.async_trigger(dht_timeout, _MY_TIME)
+
         index = 0
 
         # Assign index to each peer.
@@ -55,12 +68,23 @@ class DHT(network.Network, timer.Timer):
             }
             self.send_message(message, (network.NETWORK_BROADCAST_ADDR, network.NETWORK_PORT))
 
+        for k in self._context.key_count:
+            if self._context.key_count[k] < 3:
+                data = {
+                    "type": "insert",
+                    "uuid": self.uuid,
+                    "key": k,
+                    "value": self._context.key_bunch[k],
+                    "_magic": NETWORK_MAGIC_VALUE,
+                    "output": None
+                }
+                self.send_message(data, (network.NETWORK_BROADCAST_ADDR, network.NETWORK_PORT))
     def message_arrived(self, message, addr):
         if message["uuid"] == self.uuid and (message["type"] != "insert") and (message["type"] != "delete") and (message["type"] != "search"):
             return
         logging.debug("Message received from {addr}, {message}".format(addr=addr, message=message))
 
-        print(message)
+        #print(message)
         #print(message["type"])
         # In master case, add a node and broadcast it.
         if message["type"] == "hello":
@@ -79,6 +103,13 @@ class DHT(network.Network, timer.Timer):
                     self.master_peer_list_updated()
                     #print("Updated for Hello Message")
         # if ping, pong
+        if message["type"] == "dht_message":
+            dht = message["dht"]
+            if self._state == self.State.MASTER:
+                self._context.dht_bunch.append(dht)
+                self._context.dht_timeout_job.cancel()
+                self._context.dht_timeout_job = self.async_trigger(dht_timeout, 20)
+
         elif message["type"] == "heartbeat_ping":
             message = {
                 "type": "heartbeat_pong",
@@ -115,6 +146,13 @@ class DHT(network.Network, timer.Timer):
                 self._context.master_addr = addr
                 self._context.peer_count = int(message["peer_count"])
                 self._context.master_timestamp = message["timestamp"]
+
+                dht_message = {
+                    "type": "dht",
+                    "uuid": self.uuid,
+                    "dht": self.dht
+                }
+                self.send_message(dht_message, addr)
                 asyncio.ensure_future(self.slave(), loop=self._loop)
                 pass
 
@@ -131,10 +169,11 @@ class DHT(network.Network, timer.Timer):
                         for i in range(1, self._context.peer_count):
                             self._context.peer_list.append(self._context.peer_index[i])
                         self.slave_peer_list_updated()
-        elif message["type"] == "search":
-            logging.info("Client request: search")
+        elif message["type"] == "search" or message["type"] == "search_for_insert":
+            if message["type"] == "search":
+                logging.info("Client request: search")
             ret = self.search_item(message["key"])
-            print("search complete")
+            #print("search complete")
             if ret != False:
                 if message["uuid"] == self.uuid:
                     if not os.path.isfile(message["output"]):
@@ -157,8 +196,9 @@ class DHT(network.Network, timer.Timer):
         elif message["type"] == "insert":
             logging.info("Client request: insert")
             ret = self.insert_item(message["key"], message["value"])
-            print(self.dht)
-            print("insert complete")
+            if ret is True:
+                print("Inserted (key: "+str(message["key"])+", value: "+str(message["value"])+")")
+                print(self.dht)
             if message["uuid"] == self.uuid:
                 pass
                 #self.print_output(message["output"],str(ret))
@@ -190,7 +230,7 @@ class DHT(network.Network, timer.Timer):
                     "output": message["output"]
                 }
 
-        elif message["type"] == "client_request":
+        elif (message["type"] == "client_request") or (message["type"] == "redistribution"):
             if self._state == self.State.START:
                 if not os.path.isfile(message["output"]):
                     output = message["output"]
@@ -324,13 +364,19 @@ class DHT(network.Network, timer.Timer):
     class MasterContext:
         def __init__(self):
             self.peer_list = []
+            self.dht_bunch = []
+            self.key_bunch = {}
+            self.key_count = {}
             self.timestamp = time.time()
             self.heartbeat_send_job = None
             self.heartbeat_timer = {}
+            self.dht_timeout_job = None
 
         def cancel(self):
             if self.heartbeat_send_job is not None:
                 self.heartbeat_send_job.cancel()
+            if self.dht_timeout_job is not None:
+                self.dht_timeout_job.cancel()
             for (_, timer) in self.heartbeat_timer.items():
                 timer.cancel()
             pass

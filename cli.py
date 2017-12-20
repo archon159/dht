@@ -48,7 +48,7 @@ while(1):
 		if os.path.isfile("temp_search_result"):
 			os.remove("temp_search_result")
 		search_data = copy.deepcopy(data) 
-		search_data["command"] = "search"
+		search_data["command"] = "search_for_insert"
 		search_data["value"] = None
 		search_data["output"] = "temp_search_result"
 		search_message = json.dumps(search_data)
