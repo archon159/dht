@@ -64,6 +64,8 @@ while(1):
 				break
 			else:
 				current_time = time.time()
+		if os.path.isfile("temp_search_result"):
+			os.remove("temp_search_result")
 	if exist_flag is False:
 		message = json.dumps(data)
 		UDPSock.sendto(message.encode(encoding='utf-8', errors='strict'), addr)
