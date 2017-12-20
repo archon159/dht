@@ -191,7 +191,7 @@ class DHT(network.Network, timer.Timer):
             
         elif message["type"] == "client_response":
             if not os.path.isfile(message["output"]):
-            	self.print_output(message["output"],str(ret))
+            	self.print_output(message["output"],str(message["result"]))
 
         elif message["type"] == "insert":
             logging.info("Client request: insert")

@@ -35,7 +35,7 @@ while(1):
 		data["value"] = value
 	if command_type == "search":
 		print("Type the file name that you will get output and press enter.")
-		output = input()
+		output = "result"
 		data["output"] = output
 		if os.path.isfile(output):
 	    		os.remove(output)
@@ -70,4 +70,20 @@ while(1):
 		message = json.dumps(data)
 		UDPSock.sendto(message.encode(encoding='utf-8', errors='strict'), addr)
 		print("Sended Your Request")
+
+		if data["command"] == "search":
+			prev_time = time.time()
+			print("Waiting for searching result.")
+			current_time = time.time()
+			while (current_time - prev_time) < int(timeout):
+				if os.path.isfile(data["output"]):
+					f = open(data["output"],"r")
+					print("Search Result is : "+f.readline(1))
+					f.close()
+					exist_flag = True
+					break
+				else:
+					current_time = time.time()
+			if os.path.isfile(data["output"]):
+				os.remove(data["output"])
 		print()
