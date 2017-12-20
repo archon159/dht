@@ -6,7 +6,7 @@ from enum import Enum
 import logging
 import datetime
 import time
-
+import hashlib
 
 _SHORT = datetime.timedelta(seconds=5)
 _LONG = datetime.timedelta(seconds=20)
@@ -55,27 +55,28 @@ class DHT(network.Network, timer.Timer):
             self.send_message(message, (network.NETWORK_BROADCAST_ADDR, network.NETWORK_PORT))
 
     def message_arrived(self, message, addr):
-        if message["uuid"] == self.uuid:
+        if message["uuid"] == self.uuid and (message["type"] != "insert") and (message["type"] != "delete") and (message["type"] != "search"):
             return
         logging.debug("Message received from {addr}, {message}".format(addr=addr, message=message))
 
-        print(message["type"])
+        print(message)
+        #print(message["type"])
         # In master case, add a node and broadcast it.
         if message["type"] == "hello":
             if self._state == self.State.START:
                 self._context.messages.append((message, addr))
             elif self._state == self.State.MASTER:
-                print("message uid = "+str(message["uuid"]))
-                print("message addr = "+str(addr))
-                print(self._context.peer_list)
+                #print("message uid = "+str(message["uuid"]))
+                #print("message addr = "+str(addr))
+                #print(self._context.peer_list)
                 if not (message["uuid"], addr) in self._context.peer_list:
-                    print("New Node!!")
+                    #print("New Node!!")
                     self._context.peer_list.append((message["uuid"], addr))
                     self._context.peer_list.sort(reverse=True)
                     self.update_peer_list()
 
                     self.master_peer_list_updated()
-                    print("Updated for Hello Message")
+                    #print("Updated for Hello Message")
         # if ping, pong
         elif message["type"] == "heartbeat_ping":
             message = {
@@ -131,16 +132,146 @@ class DHT(network.Network, timer.Timer):
                         self.slave_peer_list_updated()
         elif message["type"] == "search":
             logging.info("Client request: search")
-            pass
-        elif message["type"] == "insert":
+            ret = self.search_item(message["key"])
+            print("search complete")
+            if message["uuid"] == self.uuid:
+                if not os.path.isfile(message["output"]):
+                    self.print_output(message["output"],str(ret))
+            else:
+                response_message = {
+                    "type": "client_response",
+                    "uuid": self.uuid,
+                    "client": message["client"],
+                    "key": message["key"],
+                    "result": ret,
+                    "output": message["output"]
+                }
+                self.send_message(response_message, addr)
             
+        elif message["type"] == "client_response":
+            if not os.path.isfile(message["output"]):
+            	self.print_output(message["output"],str(ret))
+
+        elif message["type"] == "insert":
             logging.info("Client request: insert")
-            pass
+            ret = self.insert_item(message["key"], message["value"])
+            print("insert complete")
+            if message["uuid"] == self.uuid:
+                #self.print_output(message["output"],str(ret))
+            else:
+                response_message = {
+                    "type": "client_response",
+                    "uuid": self.uuid,
+                    "client": message["client"],
+                    "key": message["key"],
+                    "value": message["value"],
+                    "result": ret,
+                    "output": message["output"]
+                }
+
         elif message["type"] == "delete":
             logging.info("Client request: delete")
-            pass
+            ret = self.delete_item(message["key"])
+            print("delete complete")
+            if message["uuid"] == self.uuid:
+                #self.print_output(message["output"],str(ret))
+            else:
+                response_message = {
+                    "type": "client_response",
+                    "uuid": self.uuid,
+                    "client": message["client"],
+                    "key": message["key"],
+                    "result": ret,
+                    "output": message["output"]
+                }
+
+        elif message["type"] == "client_request":
+            if self._state == self.State.START:
+                if not os.path.isfile(message["output"]):
+                    output = message["output"]
+                    f = open(output,"w+")
+                    f.write("Sorry, I'm not ready to serve your request.\r\n")
+                    f.close()
+
+            else:
+                client = self.uuid
+                new_message = {
+                    "type": message["command"],
+                    "uuid": self.uuid,
+                    "client": client,
+                    "key": message["key"],
+                    "output": message["output"]
+                }
+                if "value" in message:
+                    new_message.setdefault("value", message["value"])
+                self.send_message(new_message, (network.NETWORK_BROADCAST_ADDR, network.NETWORK_PORT))
+#        elif message["type"] == "client_response":
+#            if message["client"] == self.uuid:
+
 
     # state info func
+    def print_output(self, filename, result):
+        f = open(filename, "w+")
+        f.write(result+"\r\n")
+        f.close()
+
+    def search_item(self, key):
+        ret = False
+        h = hashlib.sha512()
+        h.update(key.encode('utf-8'))
+        hh = int.from_bytes(h.digest(),byteorder='big')
+
+        if hh in self.dht:
+            item_dict = self.dht[hh]
+            if key in item_dict:
+                ret = item_dict[key]
+            else:
+                ret = False
+        else:
+            ret = False
+        #value at success, False at fail
+        return ret
+
+    def insert_item(self, key, value):
+        ret = True
+
+        h = hashlib.sha512()
+        h.update(key.encode('utf-8'))
+        hh = int.from_bytes(h.digest(),byteorder='big')
+
+        if hh in self.dht:
+            item_dict = self.dht[hh]
+            if key in item_dict:
+                ret = False
+            else:
+                item_dict.setdefault(key, value)
+        else:
+            item_dict = {}
+            item_dict.setdefault(key, value)
+            self.dht.setdefault(hh, item_dict)
+        #True at success, False at fail
+        return ret
+            
+    def delete_item(self, key):
+        ret = False
+        h = hashlib.sha512()
+        h.update(key.encode('utf-8'))
+        hh = int.from_bytes(h.digest(),byteorder='big')
+
+        if hh in self.dht:
+            item_dict = self.dht[hh]
+            if key in item_dict:
+                del item_dict[key]
+                if len(item_dict) == 0:
+                    del self.dht[hh]
+                ret = True
+            else:
+                ret = False
+        else:
+            ret = False
+        #True at success, False at fail
+        return ret
+
     def master_peer_list_updated(self):
         logging.info("Peer list updated: I'm MASTER with {peers} peers".format(peers=len(self._context.peer_list)))
         for (uuid, addr) in self._context.peer_list:
@@ -302,6 +433,7 @@ class DHT(network.Network, timer.Timer):
         self._state = self.State.START
         self._loop = loop
         self._context = None
+        self.dht = {}
 
         import uuid
         self.uuid = str(uuid.uuid1())
