@@ -135,19 +135,20 @@ class DHT(network.Network, timer.Timer):
             logging.info("Client request: search")
             ret = self.search_item(message["key"])
             print("search complete")
-            if message["uuid"] == self.uuid:
-                if not os.path.isfile(message["output"]):
-                    self.print_output(message["output"],str(ret))
-            else:
-                response_message = {
-                    "type": "client_response",
-                    "uuid": self.uuid,
-                    "client": message["client"],
-                    "key": message["key"],
-                    "result": ret,
-                    "output": message["output"]
-                }
-                self.send_message(response_message, addr)
+            if ret != False:
+                if message["uuid"] == self.uuid:
+                    if not os.path.isfile(message["output"]):
+                        self.print_output(message["output"],str(ret))
+                else:
+                    response_message = {
+                        "type": "client_response",
+                        "uuid": self.uuid,
+                        "client": message["client"],
+                        "key": message["key"],
+                        "result": ret,
+                        "output": message["output"]
+                    }
+                    self.send_message(response_message, addr)
             
         elif message["type"] == "client_response":
             if not os.path.isfile(message["output"]):
