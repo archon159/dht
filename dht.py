@@ -7,6 +7,7 @@ import logging
 import datetime
 import time
 import hashlib
+import os
 
 _SHORT = datetime.timedelta(seconds=5)
 _LONG = datetime.timedelta(seconds=20)
