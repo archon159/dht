@@ -156,6 +156,7 @@ class DHT(network.Network, timer.Timer):
         elif message["type"] == "insert":
             logging.info("Client request: insert")
             ret = self.insert_item(message["key"], message["value"])
+            print(self.dht)
             print("insert complete")
             if message["uuid"] == self.uuid:
                 pass
